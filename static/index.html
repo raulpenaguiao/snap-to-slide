@@ -537,7 +537,7 @@
 
       let jobId;
       try {
-        const res = await fetch('/snap-to-slide/generate', { method: 'POST', body: formData });
+        const res = await fetch('./generate', { method: 'POST', body: formData });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
           throw new Error(err.detail || 'Upload failed');
@@ -551,7 +551,7 @@
       }
 
       // Open SSE stream
-      const es = new EventSource(`/snap-to-slide/stream/${jobId}`);
+      const es = new EventSource(`./stream/${jobId}`);
       currentES = es;
 
       es.onmessage = (event) => {
@@ -575,7 +575,7 @@
           currentES = null;
           const token = payload.download_token;
           downloadBtn.onclick = () => {
-            window.location.href = `/snap-to-slide/download/${token}`;
+            window.location.href = `./download/${token}`;
           };
           downloadBtn.classList.add('visible');
           resetLink.classList.add('visible');

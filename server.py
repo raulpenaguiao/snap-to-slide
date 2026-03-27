@@ -15,7 +15,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_CONNECTOR_TYPE
 from pptx.enum.text import PP_ALIGN
-from pptx.oxml import OxmlElement
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Inches, Pt
 
 app = FastAPI()
