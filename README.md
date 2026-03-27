@@ -7,6 +7,8 @@ Turn a photo of handwritten notes, diagrams, or mixed content into a PowerPoint 
 ### 1. Install dependencies
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -24,7 +26,7 @@ $env:ANTHROPIC\_API\_KEY = "sk-ant-..."
 ### 3. Run the server
 
 ```bash
-uvicorn server:app --reload
+uvicorn server:app --reload --port 8000
 ```
 
 Then open \[http://localhost:8000](http://localhost:8000) in your browser.

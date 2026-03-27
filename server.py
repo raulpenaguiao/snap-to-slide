@@ -11,9 +11,12 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from lxml import etree
 from pptx import Presentation
 from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_CONNECTOR_TYPE
 from pptx.enum.text import PP_ALIGN
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 app = FastAPI()
@@ -60,6 +63,24 @@ def add_footer(slide, width, height, text_hex: str):
     run.font.size = Pt(8)
     run.font.color.rgb = hex_to_rgb(text_hex)
     run.font.bold = False
+
+
+def rect_border_point(cx, cy, hw, hh, dx, dy):
+    """Return the point on a rectangle's border in direction (dx, dy) from center.
+    cx, cy = center; hw, hh = half-width, half-height; dx, dy = direction."""
+    if dx == 0 and dy == 0:
+        return cx, cy
+    ts = []
+    if dx > 0:
+        ts.append(hw / dx)
+    elif dx < 0:
+        ts.append(-hw / dx)
+    if dy > 0:
+        ts.append(hh / dy)
+    elif dy < 0:
+        ts.append(-hh / dy)
+    t = min(ts)
+    return cx + t * dx, cy + t * dy
 
 
 def build_bullets_slide(prs, data: dict) -> None:
@@ -128,7 +149,6 @@ def build_bullets_slide(prs, data: dict) -> None:
         note_box.fill.solid()
         note_box.fill.fore_color.rgb = hex_to_rgb(theme["accent"])
         note_box.line.fill.background()
-        # Make it semi-transparent by using a lighter tone — just use accent
         tf2 = note_box.text_frame
         tf2.margin_left = Inches(0.2)
         p = tf2.paragraphs[0]
@@ -358,11 +378,8 @@ def build_title_content_slide(prs, data: dict) -> None:
         Inches(0.5), panel_y, Inches(9.0), panel_h,
     )
     panel.fill.solid()
-    # Soft panel: lighten by mixing primary with bg — use primary at low opacity
-    # We'll just use a slightly tinted color
     panel.fill.fore_color.rgb = hex_to_rgb(theme["primary"])
     panel.line.fill.background()
-    # Overlay text on top via textbox
     tf2 = panel.text_frame
     tf2.word_wrap = True
     tf2.margin_left = Inches(0.2)
@@ -395,6 +412,213 @@ def build_title_content_slide(prs, data: dict) -> None:
     add_footer(slide, slide_width, slide_height, theme["text"])
 
 
+def build_diagram_slide(prs, data: dict) -> None:
+    """Render a geometry-aware diagram slide: boxes (nodes) connected by arrows (edges)."""
+    theme = data["theme"]
+    content = data["content"]
+    title_text = data.get("title", "")
+
+    slide_width = prs.slide_width
+    slide_height = prs.slide_height
+
+    # Content area bounds (nodes' normalized coords map into this region)
+    AREA_X = Inches(0.3)
+    AREA_Y = Inches(0.9)
+    AREA_W = Inches(9.4)
+    AREA_H = Inches(4.2)
+
+    blank_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(blank_layout)
+
+    bg = slide.background
+    fill = bg.fill
+    fill.solid()
+    fill.fore_color.rgb = hex_to_rgb(theme["bg"])
+
+    add_top_bar(slide, slide_width, theme["accent"])
+
+    # Title
+    title_box = slide.shapes.add_textbox(
+        Inches(0.4), Inches(0.2), Inches(9.2), Inches(0.6)
+    )
+    tf = title_box.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title_text
+    run.font.size = Pt(24)
+    run.font.bold = True
+    run.font.color.rgb = hex_to_rgb(theme["primary"])
+
+    nodes = content.get("nodes", [])
+    edges = content.get("edges", [])
+
+    # Compute absolute positions and build center map for edge drawing
+    node_map: dict[str, dict] = {}
+    for node in nodes:
+        ax = AREA_X + node["x"] * AREA_W
+        ay = AREA_Y + node["y"] * AREA_H
+        aw = node["w"] * AREA_W
+        ah = node["h"] * AREA_H
+        node_map[node["id"]] = {
+            "cx": ax + aw / 2,
+            "cy": ay + ah / 2,
+            "hw": aw / 2,
+            "hh": ah / 2,
+            "x": ax, "y": ay, "w": aw, "h": ah,
+        }
+
+    # Draw edges first (behind nodes)
+    for edge in edges:
+        fid = edge.get("from")
+        tid = edge.get("to")
+        if fid not in node_map or tid not in node_map:
+            continue
+        fn = node_map[fid]
+        tn = node_map[tid]
+        dx = tn["cx"] - fn["cx"]
+        dy = tn["cy"] - fn["cy"]
+        # Exit point from source node border
+        x1, y1 = rect_border_point(fn["cx"], fn["cy"], fn["hw"], fn["hh"], dx, dy)
+        # Entry point at target node border
+        x2, y2 = rect_border_point(tn["cx"], tn["cy"], tn["hw"], tn["hh"], -dx, -dy)
+
+        try:
+            connector = slide.shapes.add_connector(
+                MSO_CONNECTOR_TYPE.STRAIGHT, x1, y1, x2, y2
+            )
+            connector.line.color.rgb = hex_to_rgb(theme["accent"])
+            connector.line.width = Pt(1.5)
+            # Add arrowhead at the end (tail = destination end)
+            ln = connector.line._ln
+            if ln is not None:
+                tail_end = etree.SubElement(ln, qn("a:tailEnd"))
+                tail_end.set("type", "arrow")
+                tail_end.set("w", "med")
+                tail_end.set("len", "med")
+        except Exception:
+            pass  # Connector drawing is best-effort
+
+        # Edge label (if any)
+        label = edge.get("label", "")
+        if label:
+            lx = (x1 + x2) / 2 - Inches(0.4)
+            ly = (y1 + y2) / 2 - Pt(8)
+            lbl = slide.shapes.add_textbox(lx, ly, Inches(0.8), Pt(16))
+            tf = lbl.text_frame
+            p = tf.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.add_run()
+            run.text = label
+            run.font.size = Pt(9)
+            run.font.italic = True
+            run.font.color.rgb = hex_to_rgb(theme["accent"])
+
+    # Draw nodes (on top of edges)
+    for node in nodes:
+        nm = node_map[node["id"]]
+        shape = slide.shapes.add_shape(
+            5,  # MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE
+            nm["x"], nm["y"], nm["w"], nm["h"],
+        )
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = hex_to_rgb(theme["primary"])
+        shape.line.color.rgb = hex_to_rgb(theme["accent"])
+        shape.line.width = Pt(1)
+
+        tf = shape.text_frame
+        tf.word_wrap = True
+        tf.margin_left = Inches(0.05)
+        tf.margin_right = Inches(0.05)
+        tf.margin_top = Inches(0.03)
+        tf.margin_bottom = Inches(0.03)
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        run = p.add_run()
+        run.text = node.get("text", "")
+        run.font.size = Pt(11)
+        run.font.bold = True
+        run.font.color.rgb = hex_to_rgb(theme["bg"])
+
+    add_footer(slide, slide_width, slide_height, theme["text"])
+
+
+def build_table_slide(prs, data: dict) -> None:
+    """Render a structured table slide."""
+    theme = data["theme"]
+    content = data["content"]
+    title_text = data.get("title", "")
+
+    headers = content.get("headers", [])
+    rows = content.get("rows", [])
+
+    if not headers and not rows:
+        build_bullets_slide(prs, data)
+        return
+
+    slide_width = prs.slide_width
+    slide_height = prs.slide_height
+
+    blank_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(blank_layout)
+
+    bg = slide.background
+    fill = bg.fill
+    fill.solid()
+    fill.fore_color.rgb = hex_to_rgb(theme["bg"])
+
+    add_top_bar(slide, slide_width, theme["accent"])
+
+    # Title
+    title_box = slide.shapes.add_textbox(
+        Inches(0.4), Inches(0.2), Inches(9.2), Inches(0.6)
+    )
+    tf = title_box.text_frame
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = title_text
+    run.font.size = Pt(24)
+    run.font.bold = True
+    run.font.color.rgb = hex_to_rgb(theme["primary"])
+
+    num_cols = len(headers) if headers else (len(rows[0]) if rows else 1)
+    num_rows = len(rows) + (1 if headers else 0)
+
+    table_shape = slide.shapes.add_table(
+        num_rows, num_cols,
+        Inches(0.4), Inches(0.9),
+        Inches(9.2), Inches(4.3),
+    )
+    table = table_shape.table
+
+    row_offset = 0
+    if headers:
+        for j, header in enumerate(headers[:num_cols]):
+            cell = table.cell(0, j)
+            cell.text = str(header)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = hex_to_rgb(theme["primary"])
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.runs[0] if p.runs else p.add_run()
+            run.font.bold = True
+            run.font.size = Pt(12)
+            run.font.color.rgb = hex_to_rgb(theme["bg"])
+        row_offset = 1
+
+    for i, row in enumerate(rows):
+        for j, cell_text in enumerate(list(row)[:num_cols]):
+            cell = table.cell(i + row_offset, j)
+            cell.text = str(cell_text)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = hex_to_rgb(theme["bg"])
+            p = cell.text_frame.paragraphs[0]
+            run = p.runs[0] if p.runs else p.add_run()
+            run.font.size = Pt(11)
+            run.font.color.rgb = hex_to_rgb(theme["text"])
+
+    add_footer(slide, slide_width, slide_height, theme["text"])
+
+
 def build_pptx(data: dict) -> bytes:
     prs = Presentation()
     prs.slide_width = Inches(10)
@@ -406,6 +630,8 @@ def build_pptx(data: dict) -> bytes:
         "two_column": build_two_column_slide,
         "key_stats": build_key_stats_slide,
         "title_content": build_title_content_slide,
+        "diagram": build_diagram_slide,
+        "table": build_table_slide,
     }
     builder = builders.get(layout, build_bullets_slide)
     builder(prs, data)
@@ -415,7 +641,116 @@ def build_pptx(data: dict) -> bytes:
     return buf.getvalue()
 
 
-CLAUDE_PROMPT = """You are a PowerPoint slide designer. Analyze the image and extract its content, then design a single professional slide.
+# ── Prompts ────────────────────────────────────────────────────────────────────
+
+STRUCTURE_PROMPT = """Analyze this image and identify its primary visual structure.
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "structure_type": "diagram|table|chart|text",
+  "notes": "one sentence describing the spatial layout and key visual features"
+}
+
+Structure types:
+- "diagram": flowcharts, process flows, org charts, mind maps, network diagrams — shapes/boxes connected by arrows or lines
+- "table": grids, matrices, comparison tables, spreadsheet-like rows and columns of data
+- "chart": bar charts, pie charts, line graphs, scatter plots — numerical/statistical visualizations
+- "text": written content, bullet lists, slides with paragraphs, notes, outlines, or any primarily textual content"""
+
+
+DIAGRAM_EXTRACTION_PROMPT = """You are analyzing a diagram. Extract its structure as positioned nodes and directed edges, preserving the spatial layout exactly as it appears.
+
+Return ONLY valid JSON:
+{
+  "title": "descriptive title of the diagram",
+  "layout": "diagram",
+  "theme": {
+    "bg": "f5f0e8",
+    "primary": "2c3e50",
+    "accent": "c84b31",
+    "text": "333333"
+  },
+  "content": {
+    "nodes": [
+      {"id": "n1", "text": "Node label", "x": 0.05, "y": 0.3, "w": 0.2, "h": 0.15}
+    ],
+    "edges": [
+      {"from": "n1", "to": "n2", "label": ""}
+    ]
+  }
+}
+
+SPATIAL RULES — these are critical:
+- x, y, w, h are normalized 0.0–1.0 relative to the diagram area
+- x, y = top-left corner of the node; w, h = width and height of the node
+- Mirror the exact spatial layout: if A appears left of B in the image, A must have a smaller x value
+- Nodes at the top of the image get small y values; nodes at the bottom get larger y values
+- Do NOT cluster all nodes at the same position — spread them to match the original
+- Typical node: w=0.15–0.25, h=0.10–0.18; do not make nodes too small (min w=0.10, h=0.08)
+- Nodes must not overlap: ensure rectangles [x, x+w] × [y, y+h] do not intersect
+- Include ALL visible nodes and ALL arrows/connections
+- edges: directed from source to destination; include label text if present on the arrow
+
+Theme: choose colors that complement the content. All hex values 6 chars, NO # symbol."""
+
+
+TABLE_EXTRACTION_PROMPT = """You are analyzing a table or grid. Extract it precisely as structured data.
+
+Return ONLY valid JSON:
+{
+  "title": "table title or topic",
+  "layout": "table",
+  "theme": {
+    "bg": "f8f9fa",
+    "primary": "1a3a5c",
+    "accent": "2980b9",
+    "text": "2c3e50"
+  },
+  "content": {
+    "headers": ["Column 1", "Column 2", "Column 3"],
+    "rows": [
+      ["row1col1", "row1col2", "row1col3"],
+      ["row2col1", "row2col2", "row2col3"]
+    ]
+  }
+}
+
+Rules:
+- Extract ALL visible rows and columns faithfully — do not summarize or skip rows
+- headers: column header texts (empty array [] if there are no headers)
+- rows: array of arrays; each inner array is one data row in order
+- Preserve exact cell text content; do not paraphrase
+- If a cell spans multiple columns, repeat the value across those columns
+Theme: all hex values 6 chars, NO # symbol."""
+
+
+CHART_EXTRACTION_PROMPT = """You are analyzing a chart or graph. Extract the key data points and metrics.
+
+Return ONLY valid JSON:
+{
+  "title": "chart title",
+  "layout": "key_stats",
+  "theme": {
+    "bg": "f5f0e8",
+    "primary": "2c3e50",
+    "accent": "c84b31",
+    "text": "333333"
+  },
+  "content": {
+    "stats": [
+      {"value": "42%", "label": "Metric Name"}
+    ],
+    "note": "Chart type and key insight in one sentence"
+  }
+}
+
+Rules:
+- Extract the most important 2–5 data points as stats (the standout numbers, peaks, or totals)
+- "note": describe the chart type (bar, pie, line…) and the primary trend or finding
+- Keep value strings concise (e.g. "42%", "$1.2M", "3.7x")
+Theme: all hex values 6 chars, NO # symbol."""
+
+
+TEXT_EXTRACTION_PROMPT = """You are a PowerPoint slide designer. Analyze the image and extract its content, then design a single professional slide.
 
 Return ONLY valid JSON (no markdown, no explanation) with this exact structure:
 {
@@ -447,6 +782,13 @@ Layout rules:
 Theme: choose colors that suit the content. All hex values are 6 chars, NO # symbol.
 Extract all visible text. Be faithful to the source content."""
 
+EXTRACTION_PROMPTS = {
+    "diagram": DIAGRAM_EXTRACTION_PROMPT,
+    "table": TABLE_EXTRACTION_PROMPT,
+    "chart": CHART_EXTRACTION_PROMPT,
+    "text": TEXT_EXTRACTION_PROMPT,
+}
+
 
 async def process_job(job_id: str):
     """Generator that streams SSE events for a job."""
@@ -460,69 +802,86 @@ async def process_job(job_id: str):
     api_key = job["api_key"]
 
     try:
-        # Step 1
-        yield f"data: {json.dumps({'step': 1, 'message': 'Sending image to Claude Vision…', 'status': 'active'})}\n\n"
-        await asyncio.sleep(0.1)
-
         b64 = base64.standard_b64encode(image_data).decode("utf-8")
-
-        # Step 2
-        yield f"data: {json.dumps({'step': 1, 'message': 'Sending image to Claude Vision…', 'status': 'done'})}\n\n"
-        yield f"data: {json.dumps({'step': 2, 'message': 'Extracting text and layout…', 'status': 'active'})}\n\n"
-        await asyncio.sleep(0.1)
-
         client = anthropic.Anthropic(api_key=api_key)
-
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: client.messages.create(
+
+        def make_vision_call(prompt_text: str, max_tok: int = 512):
+            return client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=2048,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": mime_type,
-                                    "data": b64,
-                                },
+                max_tokens=max_tok,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": mime_type,
+                                "data": b64,
                             },
-                            {"type": "text", "text": CLAUDE_PROMPT},
-                        ],
-                    }
-                ],
-            ),
+                        },
+                        {"type": "text", "text": prompt_text},
+                    ],
+                }],
+            )
+
+        # ── Step 1: Detect visual structure ───────────────────────────────────
+        yield f"data: {json.dumps({'step': 1, 'message': 'Detecting visual structure…', 'status': 'active'})}\n\n"
+        await asyncio.sleep(0.05)
+
+        struct_response = await loop.run_in_executor(
+            None, lambda: make_vision_call(STRUCTURE_PROMPT, 256)
         )
+        struct_text = struct_response.content[0].text.strip()
+        if struct_text.startswith("```"):
+            lines = struct_text.split("\n")
+            struct_text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+        struct_data = json.loads(struct_text)
+        structure_type = struct_data.get("structure_type", "text")
+        if structure_type not in EXTRACTION_PROMPTS:
+            structure_type = "text"
 
-        raw_text = response.content[0].text.strip()
+        yield f"data: {json.dumps({'step': 1, 'message': 'Detecting visual structure…', 'status': 'done'})}\n\n"
 
-        # Step 3
-        yield f"data: {json.dumps({'step': 2, 'message': 'Extracting text and layout…', 'status': 'done'})}\n\n"
+        # ── Step 2: Extract content with geometry-aware prompt ─────────────────
+        type_label = {
+            "diagram": "diagram/flowchart",
+            "table": "table/grid",
+            "chart": "chart/graph",
+            "text": "text content",
+        }.get(structure_type, "content")
+        yield f"data: {json.dumps({'step': 2, 'message': f'Extracting {type_label}…', 'status': 'active'})}\n\n"
+        await asyncio.sleep(0.05)
+
+        extraction_prompt = EXTRACTION_PROMPTS[structure_type]
+        extract_response = await loop.run_in_executor(
+            None, lambda: make_vision_call(extraction_prompt, 2048)
+        )
+        raw_text = extract_response.content[0].text.strip()
+
+        yield f"data: {json.dumps({'step': 2, 'message': f'Extracting {type_label}…', 'status': 'done'})}\n\n"
+
+        # ── Step 3: Parse and validate ─────────────────────────────────────────
         yield f"data: {json.dumps({'step': 3, 'message': 'Designing slide structure…', 'status': 'active'})}\n\n"
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
 
-        # Parse JSON
         if raw_text.startswith("```"):
             lines = raw_text.split("\n")
             raw_text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
 
         slide_data = json.loads(raw_text)
 
-        # Step 4
         yield f"data: {json.dumps({'step': 3, 'message': 'Designing slide structure…', 'status': 'done'})}\n\n"
+
+        # ── Step 4: Build PPTX ─────────────────────────────────────────────────
         yield f"data: {json.dumps({'step': 4, 'message': 'Building PowerPoint file…', 'status': 'active'})}\n\n"
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
 
         pptx_bytes = await loop.run_in_executor(None, lambda: build_pptx(slide_data))
 
         token = str(uuid.uuid4())
         downloads[token] = pptx_bytes
-
-        # Clean up job
         del jobs[job_id]
 
         yield f"data: {json.dumps({'step': 4, 'message': 'Building PowerPoint file…', 'status': 'done', 'download_token': token})}\n\n"
