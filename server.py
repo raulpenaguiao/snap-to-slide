@@ -11,12 +11,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from lxml import etree
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_CONNECTOR_TYPE
 from pptx.enum.text import PP_ALIGN
-from pptx.oxml.ns import qn
+from pptx.oxml import OxmlElement
 from pptx.util import Inches, Pt
 
 app = FastAPI()
@@ -488,13 +487,14 @@ def build_diagram_slide(prs, data: dict) -> None:
             )
             connector.line.color.rgb = hex_to_rgb(theme["accent"])
             connector.line.width = Pt(1.5)
-            # Add arrowhead at the end (tail = destination end)
+            # Add arrowhead at the end using OxmlElement (correct namespace handling)
             ln = connector.line._ln
             if ln is not None:
-                tail_end = etree.SubElement(ln, qn("a:tailEnd"))
+                tail_end = OxmlElement("a:tailEnd")
                 tail_end.set("type", "arrow")
                 tail_end.set("w", "med")
                 tail_end.set("len", "med")
+                ln.append(tail_end)
         except Exception:
             pass  # Connector drawing is best-effort
 
@@ -517,7 +517,7 @@ def build_diagram_slide(prs, data: dict) -> None:
     for node in nodes:
         nm = node_map[node["id"]]
         shape = slide.shapes.add_shape(
-            5,  # MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE
+            1,  # MSO_AUTO_SHAPE_TYPE.RECTANGLE (same as original code uses)
             nm["x"], nm["y"], nm["w"], nm["h"],
         )
         shape.fill.solid()
