@@ -7,401 +7,101 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #f5f0e8;
-      --card: #fffdf8;
-      --accent: #c84b31;
-      --accent-light: #f0e0db;
-      --text: #2c2c2c;
-      --text-muted: #7a7065;
-      --border: #ddd8cc;
-      --success: #2d7a4f;
-      --success-bg: #e8f5ee;
-      --error: #c84b31;
-      --error-bg: #fdf0ed;
-    }
-
-    body {
-      background-color: var(--bg);
-      background-image:
-        linear-gradient(rgba(0,0,0,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,0,0,0.025) 1px, transparent 1px);
-      background-size: 32px 32px;
-      font-family: 'DM Sans', sans-serif;
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem 4rem;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 2.5rem;
-    }
-
-    header h1 {
-      font-family: 'DM Serif Display', serif;
-      font-size: 2.5rem;
-      color: var(--text);
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-    }
-
-    header h1 span {
-      color: var(--accent);
-    }
-
-    header p {
-      margin-top: 0.5rem;
-      color: var(--text-muted);
-      font-size: 1rem;
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 2rem;
-      width: 100%;
-      max-width: 560px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    }
-
-    /* Upload zone */
-    #drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 10px;
-      padding: 2.5rem 1.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      background: transparent;
-    }
-
-    #drop-zone:hover, #drop-zone.drag-over {
-      border-color: var(--accent);
-      background: var(--accent-light);
-    }
-
-    #drop-zone .upload-icon {
-      font-size: 2.5rem;
-      margin-bottom: 0.75rem;
-      display: block;
-    }
-
-    #drop-zone .upload-label {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.15rem;
-      color: var(--text);
-    }
-
-    #drop-zone .upload-hint {
-      margin-top: 0.4rem;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-
-    #file-input { display: none; }
-
-    /* API key input */
-    .api-key-wrap {
-      margin-bottom: 1.25rem;
-    }
-
-    .api-key-wrap label {
-      display: block;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 0.4rem;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-
-    .api-key-field {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    #api-key-input {
-      flex: 1;
-      padding: 0.6rem 0.85rem;
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.9rem;
-      background: var(--bg);
-      color: var(--text);
-      transition: border-color 0.2s;
-    }
-
-    #api-key-input:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    #api-key-input::placeholder { color: #b0a99f; }
-
-    #toggle-key-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 7px;
-      padding: 0 0.75rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    #toggle-key-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-    /* Preview */
-    #preview-section {
-      display: none;
-      margin-top: 1.25rem;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    #preview-section.visible { display: flex; }
-
-    #preview-img {
-      width: 80px;
-      height: 60px;
-      object-fit: cover;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-
-    #preview-name {
-      flex: 1;
-      font-size: 0.9rem;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #change-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.3rem 0.75rem;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
-    }
-
-    #change-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* Generate button */
-    #generate-btn {
-      margin-top: 1.5rem;
-      width: 100%;
-      padding: 0.85rem;
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-    }
-
-    #generate-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    #generate-btn:not(:disabled):hover {
-      opacity: 0.88;
-    }
-
-    #generate-btn:not(:disabled):active {
-      transform: scale(0.98);
-    }
-
-    /* Progress panel */
-    #progress-panel {
-      display: none;
-      margin-top: 1.5rem;
-    }
-
-    #progress-panel.visible { display: block; }
-
-    #progress-panel h3 {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1rem;
-      margin-bottom: 1rem;
-      color: var(--text-muted);
-      font-weight: normal;
-      letter-spacing: 0.01em;
-    }
-
-    .step-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
-    }
-
-    .step-item {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      font-size: 0.92rem;
-      color: var(--text-muted);
-      transition: color 0.3s;
-    }
-
-    .step-item.active { color: var(--text); }
-    .step-item.done { color: var(--text); }
-
-    .step-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #ccc8c0;
-      flex-shrink: 0;
-      transition: background 0.3s;
-      position: relative;
-    }
-
-    .step-item.active .step-dot {
-      background: var(--accent);
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    .step-item.done .step-dot {
-      background: var(--success);
-    }
-
-    .step-item.done .step-dot::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 7px;
-      color: #fff;
-      line-height: 1;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.4); opacity: 0.7; }
-    }
-
-    /* Download button */
-    #download-btn {
-      display: none;
-      margin-top: 1.5rem;
-      width: 100%;
-      padding: 0.85rem;
-      background: var(--success);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    #download-btn.visible { display: block; }
-    #download-btn:hover { opacity: 0.88; }
-
-    /* Error */
-    #error-box {
-      display: none;
-      margin-top: 1.25rem;
-      padding: 0.85rem 1rem;
-      background: var(--error-bg);
-      border: 1px solid #f0c4bb;
-      border-radius: 8px;
-      color: var(--error);
-      font-size: 0.9rem;
-    }
-
-    #error-box.visible { display: block; }
-
-    /* Reset link */
-    #reset-link {
-      display: none;
-      margin-top: 1rem;
-      text-align: center;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-
-    #reset-link.visible { display: block; }
-
-    #reset-link a {
-      color: var(--accent);
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    footer {
-      margin-top: 3rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      text-align: center;
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <header>
     <h1>Snap to <span>Slide</span></h1>
-    <p>Turn a photo of notes or diagrams into a PowerPoint slide — instantly.</p>
+    <p>Turn a photo or video frame of notes or diagrams into a PowerPoint slide — instantly.</p>
   </header>
 
   <div class="card">
+
+    <!-- API key -->
     <div class="api-key-wrap">
-      <label for="api-key-input">Anthropic API Key</label>
+      <label class="field-label" for="api-key-input">Anthropic API Key</label>
       <div class="api-key-field">
-        <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+        <input type="password" id="api-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
         <button id="toggle-key-btn" type="button">Show</button>
       </div>
     </div>
 
-    <div id="drop-zone" role="button" tabindex="0" aria-label="Upload image">
+    <!-- File drop zone -->
+    <div id="drop-zone" role="button" tabindex="0" aria-label="Upload image or video">
       <span class="upload-icon">📎</span>
-      <div class="upload-label">Drop your image here</div>
-      <div class="upload-hint">or click to browse · JPG, PNG, WEBP, GIF</div>
+      <div class="upload-label">Drop your image or video here</div>
+      <div class="upload-hint">or click to browse · JPG, PNG, WEBP, GIF, MP4, MOV, WEBM</div>
     </div>
-    <input type="file" id="file-input" accept="image/*" />
+    <input type="file" id="file-input" accept="image/*,video/*" />
 
+    <!-- Image preview (shown for images and captured video frames) -->
     <div id="preview-section">
-      <img id="preview-img" src="" alt="Preview" />
-      <span id="preview-name"></span>
-      <button id="change-btn">Change</button>
+      <div class="preview-image-wrap">
+        <img id="preview-img" src="" alt="Preview" />
+      </div>
+      <div id="preview-name"></div>
+      <div class="preview-controls">
+        <button id="rotate-left-btn">↺ Rotate left</button>
+        <button id="rotate-right-btn">↻ Rotate right</button>
+        <button id="change-btn">Change file</button>
+      </div>
+    </div>
+
+    <!-- Video preview with frame slider (shown for videos) -->
+    <div id="video-preview-section">
+      <video id="preview-video" muted playsinline preload="metadata"></video>
+      <div class="frame-slider-row">
+        <input type="range" id="frame-slider" min="0" max="100" value="0" step="0.01" />
+        <span id="frame-time">0.0s</span>
+      </div>
+      <button id="use-frame-btn" disabled>Capture this frame</button>
+      <div class="video-filename" id="video-filename"></div>
+    </div>
+
+    <!-- Hint textarea (always visible) -->
+    <div class="hint-wrap">
+      <label class="field-label" for="hint-input">Hint (optional)</label>
+      <textarea
+        id="hint-input"
+        rows="2"
+        placeholder="e.g. &quot;This is a process flow for onboarding&quot; or &quot;Focus on the key metrics&quot;"
+        spellcheck="true"
+      ></textarea>
+    </div>
+
+    <!-- Theme / template selector -->
+    <div class="theme-wrap">
+      <label class="field-label" for="theme-select">Slide Theme</label>
+      <div class="theme-selector">
+        <select id="theme-select"></select>
+        <div id="theme-swatch"></div>
+        <span id="theme-desc"></span>
+      </div>
     </div>
 
     <button id="generate-btn" disabled>Generate PowerPoint Slide</button>
 
+    <!-- Progress steps -->
     <div id="progress-panel">
       <h3>Processing…</h3>
       <ul class="step-list">
-        <li class="step-item" data-step="1"><span class="step-dot"></span>Sending image to Claude Vision…</li>
-        <li class="step-item" data-step="2"><span class="step-dot"></span>Extracting text and layout…</li>
+        <li class="step-item" data-step="1"><span class="step-dot"></span>Analyzing image with Claude Vision…</li>
+        <li class="step-item" data-step="2"><span class="step-dot"></span>Extracting slide elements…</li>
         <li class="step-item" data-step="3"><span class="step-dot"></span>Designing slide structure…</li>
         <li class="step-item" data-step="4"><span class="step-dot"></span>Building PowerPoint file…</li>
       </ul>
+    </div>
+
+    <!-- Extracted content preview (appears after step 3) -->
+    <div id="content-preview">
+      <div id="cp-header">
+        <span id="cp-header-title">Extracted content</span>
+        <span id="cp-toggle-icon">▾</span>
+      </div>
+      <div id="cp-body">
+        <div id="cp-slide-title"></div>
+        <div id="cp-items"></div>
+      </div>
     </div>
 
     <button id="download-btn">⬇ Download slide.pptx</button>
@@ -409,205 +109,11 @@
     <div id="error-box"></div>
 
     <div id="reset-link"><a id="start-over">Start over</a></div>
+
   </div>
 
   <footer>Powered by Claude Vision + python-pptx</footer>
 
-  <script>
-    const dropZone = document.getElementById('drop-zone');
-    const fileInput = document.getElementById('file-input');
-    const previewSection = document.getElementById('preview-section');
-    const previewImg = document.getElementById('preview-img');
-    const previewName = document.getElementById('preview-name');
-    const changeBtn = document.getElementById('change-btn');
-    const generateBtn = document.getElementById('generate-btn');
-    const progressPanel = document.getElementById('progress-panel');
-    const downloadBtn = document.getElementById('download-btn');
-    const errorBox = document.getElementById('error-box');
-    const resetLink = document.getElementById('reset-link');
-    const stepItems = document.querySelectorAll('.step-item');
-    const apiKeyInput = document.getElementById('api-key-input');
-    const toggleKeyBtn = document.getElementById('toggle-key-btn');
-
-    let selectedFile = null;
-    let currentES = null;
-
-    // Show/hide API key
-    toggleKeyBtn.addEventListener('click', () => {
-      const isPassword = apiKeyInput.type === 'password';
-      apiKeyInput.type = isPassword ? 'text' : 'password';
-      toggleKeyBtn.textContent = isPassword ? 'Hide' : 'Show';
-    });
-
-    // Restore key from sessionStorage
-    const savedKey = sessionStorage.getItem('anthropic_api_key');
-    if (savedKey) apiKeyInput.value = savedKey;
-
-    apiKeyInput.addEventListener('input', () => {
-      sessionStorage.setItem('anthropic_api_key', apiKeyInput.value);
-    });
-
-    // Drop zone interactions
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
-
-    dropZone.addEventListener('dragover', e => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-    dropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) setFile(file);
-    });
-
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) setFile(fileInput.files[0]);
-    });
-
-    changeBtn.addEventListener('click', () => fileInput.click());
-
-    function setFile(file) {
-      selectedFile = file;
-      const url = URL.createObjectURL(file);
-      previewImg.src = url;
-      previewName.textContent = file.name;
-      previewSection.classList.add('visible');
-      generateBtn.disabled = false;
-      hideError();
-      downloadBtn.classList.remove('visible');
-      resetLink.classList.remove('visible');
-      progressPanel.classList.remove('visible');
-      resetSteps();
-    }
-
-    function resetSteps() {
-      stepItems.forEach(item => {
-        item.classList.remove('active', 'done');
-      });
-    }
-
-    function setStep(stepNum, status) {
-      stepItems.forEach(item => {
-        const n = parseInt(item.dataset.step);
-        if (n === stepNum) {
-          item.classList.remove('active', 'done');
-          if (status === 'active') item.classList.add('active');
-          if (status === 'done') item.classList.add('done');
-        }
-      });
-    }
-
-    function showError(msg) {
-      errorBox.textContent = msg;
-      errorBox.classList.add('visible');
-      resetLink.classList.add('visible');
-    }
-
-    function hideError() {
-      errorBox.classList.remove('visible');
-      resetLink.classList.remove('visible');
-    }
-
-    generateBtn.addEventListener('click', async () => {
-      if (!selectedFile) return;
-
-      const apiKey = apiKeyInput.value.trim();
-      if (!apiKey) {
-        showError('Please enter your Anthropic API key.');
-        apiKeyInput.focus();
-        return;
-      }
-
-      generateBtn.disabled = true;
-      hideError();
-      downloadBtn.classList.remove('visible');
-      progressPanel.classList.add('visible');
-      resetSteps();
-
-      // Close any existing SSE connection
-      if (currentES) { currentES.close(); currentES = null; }
-
-      // Upload image + API key
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('api_key', apiKey);
-
-      let jobId;
-      try {
-        const res = await fetch('./generate', { method: 'POST', body: formData });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
-          throw new Error(err.detail || 'Upload failed');
-        }
-        const data = await res.json();
-        jobId = data.job_id;
-      } catch (err) {
-        showError('Upload failed: ' + err.message);
-        generateBtn.disabled = false;
-        return;
-      }
-
-      // Open SSE stream
-      const es = new EventSource(`./stream/${jobId}`);
-      currentES = es;
-
-      es.onmessage = (event) => {
-        let payload;
-        try { payload = JSON.parse(event.data); } catch { return; }
-
-        if (payload.error) {
-          es.close();
-          currentES = null;
-          showError('Error: ' + payload.error);
-          generateBtn.disabled = false;
-          return;
-        }
-
-        if (payload.step) {
-          setStep(payload.step, payload.status);
-        }
-
-        if (payload.status === 'done' && payload.download_token) {
-          es.close();
-          currentES = null;
-          const token = payload.download_token;
-          downloadBtn.onclick = () => {
-            window.location.href = `./download/${token}`;
-          };
-          downloadBtn.classList.add('visible');
-          resetLink.classList.add('visible');
-          progressPanel.querySelector('h3').textContent = 'Done!';
-        }
-      };
-
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) return; // normal close
-        es.close();
-        currentES = null;
-        // Only show error if we haven't completed
-        if (!downloadBtn.classList.contains('visible')) {
-          showError('Connection lost. Please try again.');
-          generateBtn.disabled = false;
-        }
-      };
-    });
-
-    document.getElementById('start-over').addEventListener('click', () => {
-      if (currentES) { currentES.close(); currentES = null; }
-      selectedFile = null;
-      fileInput.value = '';
-      previewImg.src = '';
-      previewSection.classList.remove('visible');
-      generateBtn.disabled = true;
-      progressPanel.classList.remove('visible');
-      progressPanel.querySelector('h3').textContent = 'Processing…';
-      downloadBtn.classList.remove('visible');
-      hideError();
-      resetSteps();
-    });
-  </script>
+  <script src="./app.js"></script>
 </body>
 </html>
